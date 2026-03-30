@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Stinger Detailing - 예약 관리</title>
+<meta name="theme-color" content="#0d1117">
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0d1117; --bg2: #161b22; --bg3: #1c2128; --bg4: #21262d;
+  --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.15);
+  --text: #e6edf3; --text2: #8b949e; --text3: #484f58;
+  --accent: #e53e3e; --accent2: #fc8181; --accent-dim: rgba(229,62,62,0.12);
+  --green: #48bb78; --green-dim: rgba(72,187,120,0.15);
+  --blue: #63b3ed; --blue-dim: rgba(99,179,237,0.15);
+  --amber: #f6ad55; --amber-dim: rgba(246,173,85,0.15);
+  --sidebar-w: 240px;
+}
+body { font-family: -apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif; background:var(--bg); color:var(--text); height:100vh; overflow:hidden; display:flex; flex-direction:column; }
+input,select { font-family:inherit; font-size:13px; color:var(--text); background:var(--bg4); border:1px solid var(--border2); border-radius:8px; padding:8px 10px; outline:none; transition:border-color .15s; width:100%; }
+input:focus,select:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+select option { background:var(--bg3); }
+button { font-family:inherit; cursor:pointer; }
+
+.topbar { display:flex; align-items:center; gap:12px; padding:10px 16px; background:var(--bg2); border-bottom:1px solid var(--border); flex-shrink:0; height:52px; }
+.menu-btn { background:none; border:none; color:var(--text2); font-size:18px; padding:4px 8px; border-radius:6px; }
+.menu-btn:hover { background:var(--border); color:var(--text); }
+.logo-text { font-size:15px; font-weight:700; color:var(--text); letter-spacing:-0.3px; }
+.sync-dot { width:7px; height:7px; border-radius:50%; background:var(--green); flex-shrink:0; }
+.sync-dot.connecting { background:var(--amber); animation:pulse 1s infinite; }
+.sync-dot.error { background:var(--accent); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+.topbar-nav { display:flex; align-items:center; gap:6px; margin-left:auto; }
+.view-btn { background:none; border:1px solid var(--border2); color:var(--text2); font-size:12px; padding:5px 10px; border-radius:6px; transition:all .15s; }
+.view-btn.active,.view-btn:hover { background:var(--accent-dim); border-color:var(--accent); color:var(--accent2); }
+.nav-arrows { display:flex; align-items:center; gap:4px; margin-left:8px; }
+.arr-btn { background:none; border:1px solid var(--border2); color:var(--text2); padding:5px 10px; border-radius:6px; font-size:14px; }
+.arr-btn:hover { background:var(--bg4); color:var(--text); }
+.period-label { font-size:13px; font-weight:600; color:var(--text); min-width:110px; text-align:center; }
+.today-btn { background:none; border:1px solid var(--border2); color:var(--text2); font-size:12px; padding:5px 10px; border-radius:6px; margin-left:4px; }
+.today-btn:hover { background:var(--bg4); color:var(--text); }
+
+.layout { display:flex; flex:1; overflow:hidden; position:relative; }
+.sidebar { width:var(--sidebar-w); background:var(--bg2); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; flex-shrink:0; transition:transform .25s, width .25s; }
+.sidebar.hidden { transform:translateX(-100%); width:0; overflow:hidden; }
+.sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:40; }
+.sidebar-overlay.visible { display:block; }
+.sidebar-section { padding:14px 14px 8px; }
+.sidebar-section+.sidebar-section { border-top:1px solid var(--border); }
+.section-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:var(--text3); margin-bottom:10px; }
+.rev-period { font-size:11px; color:var(--accent2); font-weight:600; margin-bottom:8px; padding:4px 8px; background:var(--accent-dim); border-radius:5px; text-align:center; }
+.rev-card { background:var(--bg3); border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:8px; }
+.rev-label { font-size:11px; color:var(--text2); margin-bottom:4px; }
+.rev-amount { font-size:16px; font-weight:700; color:var(--text); }
+.rev-amount span { font-size:11px; color:var(--text2); font-weight:400; }
+.pay-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border); }
+.pay-row:last-child { border-bottom:none; }
+.pay-badge { font-size:11px; padding:2px 7px; border-radius:10px; font-weight:600; }
+.pay-badge.card { background:var(--blue-dim); color:var(--blue); }
+.pay-badge.transfer { background:var(--green-dim); color:var(--green); }
+.pay-badge.cash { background:var(--amber-dim); color:var(--amber); }
+.pay-amount { font-size:12px; font-weight:600; color:var(--text); }
+
+.main { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+.cal-wrap { flex:1; overflow:auto; padding:12px; }
+
+.month-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:1px; background:var(--border); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.month-head { background:var(--bg3); padding:8px 4px; text-align:center; font-size:11px; font-weight:600; color:var(--text2); }
+.month-head.sun { color:var(--accent2); }
+.month-head.sat { color:var(--blue); }
+.month-day { background:var(--bg2); padding:6px; min-height:80px; position:relative; cursor:pointer; transition:background .15s; }
+.month-day:hover { background:var(--bg3); }
+.month-day.other-month { opacity:.35; }
+.month-day.today .day-num-inner { background:var(--accent); color:#fff; border-radius:50%; }
+.day-num { font-size:12px; font-weight:600; color:var(--text2); width:22px; height:22px; display:flex; align-items:center; justify-content:center; }
+.day-num-inner { width:22px; height:22px; display:flex; align-items:center; justify-content:center; }
+.day-num.sun { color:var(--accent2); }
+.day-num.sat { color:var(--blue); }
+.day-plus { position:absolute; top:5px; right:5px; width:18px; height:18px; background:var(--accent); color:#fff; border:none; border-radius:50%; font-size:14px; line-height:1; display:none; align-items:center; justify-content:center; padding:0; }
+.month-day:hover .day-plus { display:flex; }
+.appt-chip { background:var(--accent-dim); border:1px solid rgba(229,62,62,.3); border-radius:4px; padding:2px 5px; font-size:10px; color:var(--accent2); margin-top:2px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.appt-chip:hover { background:rgba(229,62,62,.25); }
+.appt-chip.dragging { opacity:.4; }
+.month-day.drag-over { background:var(--accent-dim); outline:2px dashed var(--accent); }
+
+.week-grid { display:grid; grid-template-columns:50px repeat(7,1fr); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.week-time-head { background:var(--bg3); border-right:1px solid var(--border); border-bottom:1px solid var(--border); height:44px; }
+.week-day-head { background:var(--bg3); padding:8px 4px; text-align:center; font-size:11px; font-weight:600; border-bottom:1px solid var(--border); border-right:1px solid var(--border); }
+.week-day-head .wdh-name { color:var(--text2); }
+.week-day-head .wdh-num { font-size:16px; font-weight:700; color:var(--text); margin-top:2px; }
+.week-day-head.today-col .wdh-num { color:var(--accent2); }
+.week-day-head.sun-col .wdh-name { color:var(--accent2); }
+.week-day-head.sat-col .wdh-name { color:var(--blue); }
+.week-time-cell { background:var(--bg2); border-right:1px solid var(--border); border-bottom:1px solid var(--border); padding:4px 6px; font-size:10px; color:var(--text3); text-align:right; height:50px; }
+.week-slot { background:var(--bg2); border-right:1px solid var(--border); border-bottom:1px solid var(--border); height:50px; position:relative; cursor:pointer; transition:background .12s; }
+.week-slot:hover { background:var(--bg3); }
+.week-slot.drag-over { background:var(--accent-dim); outline:2px dashed var(--accent); }
+.week-appt { position:absolute; left:2px; right:2px; top:2px; bottom:2px; background:var(--accent-dim); border:1px solid rgba(229,62,62,.4); border-radius:4px; padding:2px 4px; font-size:10px; color:var(--accent2); overflow:hidden; cursor:pointer; }
+
+.day-view { max-width:600px; margin:0 auto; }
+.day-slots { border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.day-slot { display:flex; align-items:stretch; border-bottom:1px solid var(--border); min-height:48px; cursor:pointer; transition:background .12s; }
+.day-slot:last-child { border-bottom:none; }
+.day-slot:hover { background:var(--bg3); }
+.day-slot-time { width:60px; flex-shrink:0; padding:8px; font-size:11px; color:var(--text3); background:var(--bg3); border-right:1px solid var(--border); display:flex; align-items:flex-start; }
+.day-slot-content { flex:1; padding:6px 8px; display:flex; flex-wrap:wrap; gap:4px; align-content:flex-start; }
+.day-appt { background:var(--accent-dim); border:1px solid rgba(229,62,62,.3); border-radius:6px; padding:4px 8px; font-size:11px; color:var(--accent2); cursor:pointer; }
+.day-appt:hover { background:rgba(229,62,62,.25); }
+
+.modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:100; align-items:center; justify-content:center; padding:16px; }
+.modal-backdrop.open { display:flex; }
+.modal { background:var(--bg2); border:1px solid var(--border2); border-radius:14px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; }
+.modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px 14px; border-bottom:1px solid var(--border); }
+.modal-title { font-size:15px; font-weight:700; }
+.modal-close { background:none; border:none; color:var(--text2); font-size:20px; line-height:1; padding:2px 6px; border-radius:6px; }
+.modal-close:hover { background:var(--border); color:var(--text); }
+.modal-body { padding:16px 20px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.field-group { display:flex; flex-direction:column; gap:5px; }
+.field-group.full { grid-column:1/-1; }
+.field-label { font-size:11px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; }
+.modal-footer { padding:12px 20px 16px; display:flex; gap:8px; justify-content:flex-end; border-top:1px solid var(--border); }
+.btn-cancel { background:var(--bg4); border:1px solid var(--border2); color:var(--text2); font-size:13px; padding:8px 16px; border-radius:8px; }
+.btn-cancel:hover { background:var(--bg3); color:var(--text); }
+.btn-save { background:var(--accent); border:none; color:#fff; font-size:13px; font-weight:600; padding:8px 20px; border-radius:8px; }
+.btn-save:hover { background:#c53030; }
+.btn-delete { background:none; border:1px solid var(--border2); color:var(--text3); font-size:12px; padding:8px 14px; border-radius:8px; margin-right:auto; }
+.btn-delete:hover { border-color:var(--accent); color:var(--accent2); }
+
+@media (max-width:768px) {
+  .sidebar { position:fixed; top:52px; left:0; bottom:0; z-index:50; transform:translateX(-100%); }
+  .sidebar.open { transform:translateX(0); }
+  .sidebar.hidden { display:none; }
+  .period-label { min-width:80px; font-size:12px; }
+  .view-btn { font-size:11px; padding:4px 7px; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+  <span class="logo-text">Stinger Detailing</span>
+  <div id="syncDot" class="sync-dot connecting" title="연결 중..."></div>
+  <div class="topbar-nav">
+    <button class="view-btn active" id="vMonth" onclick="setView('month')">월</button>
+    <button class="view-btn" id="vWeek" onclick="setView('week')">주</button>
+    <button class="view-btn" id="vDay" onclick="setView('day')">일</button>
+    <div class="nav-arrows">
+      <button class="arr-btn" onclick="navigate(-1)">‹</button>
+      <span class="period-label" id="periodLabel"></span>
+      <button class="arr-btn" onclick="navigate(1)">›</button>
+    </div>
+    <button class="today-btn" onclick="goToday()">오늘</button>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-section">
+      <div class="section-title">매출 현황</div>
+      <div id="revPeriodLabel" class="rev-period">-</div>
+      <div class="rev-card">
+        <div class="rev-label">총 매출</div>
+        <div class="rev-amount" id="revTotal">₩0 <span>(0건)</span></div>
+      </div>
+      <div class="rev-card" style="padding:8px 12px;">
+        <div class="pay-row">
+          <span class="pay-badge card">카드</span>
+          <span class="pay-amount" id="revCard">₩0</span>
+        </div>
+        <div class="pay-row">
+          <span class="pay-badge transfer">이체</span>
+          <span class="pay-amount" id="revTransfer">₩0</span>
+        </div>
+        <div class="pay-row">
+          <span class="pay-badge cash">현금</span>
+          <span class="pay-amount" id="revCash">₩0</span>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="section-title">이번 달 예약</div>
+      <div class="rev-card">
+        <div class="rev-label">총 예약 건수</div>
+        <div class="rev-amount" id="monthCount">0 <span>건</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="cal-wrap" id="calWrap"></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">예약 등록</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field-group">
+        <div class="field-label">고객명 *</div>
+        <input id="fName" placeholder="홍길동">
+      </div>
+      <div class="field-group">
+        <div class="field-label">전화번호</div>
+        <input id="fPhone" placeholder="010-0000-0000" type="tel">
+      </div>
+      <div class="field-group">
+        <div class="field-label">예약 날짜</div>
+        <input id="fDate" type="date">
+      </div>
+      <div class="field-group">
+        <div class="field-label">예약 시간</div>
+        <input id="fTime" type="time" value="09:00">
+      </div>
+      <div class="field-group">
+        <div class="field-label">차종</div>
+        <input id="fCar" placeholder="현대 아반떼">
+      </div>
+      <div class="field-group">
+        <div class="field-label">차량번호</div>
+        <input id="fPlate" placeholder="123가 4567">
+      </div>
+      <div class="field-group full">
+        <div class="field-label">작업내용</div>
+        <input id="fWork" placeholder="풀코팅, 유리막코팅 등">
+      </div>
+      <div class="field-group">
+        <div class="field-label">거주지</div>
+        <input id="fAddr" placeholder="울산 남구">
+      </div>
+      <div class="field-group">
+        <div class="field-label">금액</div>
+        <input id="fAmount" type="number" placeholder="150000">
+      </div>
+      <div class="field-group full">
+        <div class="field-label">결제방법</div>
+        <select id="fPay">
+          <option value="">선택</option>
+          <option value="카드">카드</option>
+          <option value="이체">이체</option>
+          <option value="현금">현금</option>
+        </select>
+      </div>
+      <div class="field-group full">
+        <div class="field-label">메모</div>
+        <input id="fMemo" placeholder="기타 메모">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-delete" id="btnDelete" onclick="deleteAppt()" style="display:none">삭제</button>
+      <button class="btn-cancel" onclick="closeModal()">취소</button>
+      <button class="btn-save" onclick="saveAppt()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── FIREBASE ─────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyAN7sReKaMVAXjwFHdfzsAQk3saBkxu3Zw",
+  authDomain: "stinger-v02.firebaseapp.com",
+  projectId: "stinger-v02",
+  storageBucket: "stinger-v02.firebasestorage.app",
+  messagingSenderId: "649911606282",
+  appId: "1:649911606282:web:ec8b0a1edccab2f848d3f3"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const col = db.collection('appointments');
+
+// ── 실제 Firebase 필드명에 맞게 매핑 ─────────────────────────
+// Firebase 저장 필드명:
+//   customerName, phone, date, reservationTime, carType,
+//   licencePlate, workDetails, address, amount, paymentMethod, memo
+
+let appointments = [];
+let view = 'month';
+let cursor = new Date(); cursor.setDate(1);
+let editingId = null;
+let dragId = null;
+let sidebarOpen = window.innerWidth > 768;
+
+// ── SIDEBAR ──────────────────────────────────────────────────
+function toggleSidebar() {
+  sidebarOpen = !sidebarOpen;
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebarOverlay');
+  if (sidebarOpen) {
+    sb.classList.remove('hidden');
+    if (window.innerWidth <= 768) { sb.classList.add('open'); ov.classList.add('visible'); }
+  } else {
+    if (window.innerWidth <= 768) { sb.classList.remove('open'); ov.classList.remove('visible'); }
+    else sb.classList.add('hidden');
+  }
+}
+function closeSidebar() {
+  sidebarOpen = false;
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('visible');
+}
+window.addEventListener('resize', () => {
+  const sb = document.getElementById('sidebar');
+  if (window.innerWidth > 768) {
+    sb.classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('visible');
+    if (sidebarOpen) sb.classList.remove('hidden');
+  }
+});
+if (window.innerWidth <= 768) {
+  document.getElementById('sidebar').classList.add('hidden');
+  sidebarOpen = false;
+}
+
+// ── REALTIME ─────────────────────────────────────────────────
+const dot = document.getElementById('syncDot');
+col.onSnapshot(snap => {
+  appointments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  dot.className = 'sync-dot';
+  dot.title = '연결됨';
+  render();
+}, err => {
+  dot.className = 'sync-dot error';
+  dot.title = '연결 오류';
+});
+
+// ── 헬퍼: 필드명 호환 ────────────────────────────────────────
+// Firebase 실제 필드명: customerName, reservationTime, carType, licencePlate(또는 licensePlate), workDetails, address, paymentMethod
+function getName(a) { return a.customerName || a.name || ''; }
+function getTime(a) { return a.reservationTime || a.time || ''; }
+function getCar(a) { return a.carType || a.car || ''; }
+function getPlate(a) { return a.licencePlate || a.licensePlate || a.plate || ''; }
+function getWork(a) { return a.workDetails || a.work || ''; }
+function getAddr(a) { return a.address || a.addr || ''; }
+function getPayment(a) { return a.paymentMethod || a.payment || ''; }
+function getMemo(a) { return a.memo || ''; }
+
+// ── NAV ──────────────────────────────────────────────────────
+function setView(v) {
+  view = v;
+  ['Month','Week','Day'].forEach(x => document.getElementById('v'+x).classList.toggle('active', x.toLowerCase()===v));
+  render();
+}
+function navigate(dir) {
+  if (view==='month') cursor.setMonth(cursor.getMonth()+dir);
+  else if (view==='week') cursor.setDate(cursor.getDate()+dir*7);
+  else cursor.setDate(cursor.getDate()+dir);
+  render();
+}
+function goToday() { cursor = new Date(); if (view==='month') cursor.setDate(1); render(); }
+function fmt(n) { return Number(n||0).toLocaleString('ko-KR'); }
+
+// ── 매출 (현재 보이는 달/주/일 기준) ─────────────────────────
+function updateRevenue() {
+  let filtered = [];
+  let periodText = '';
+
+  if (view === 'month') {
+    const y = cursor.getFullYear(), m = cursor.getMonth();
+    filtered = appointments.filter(a => {
+      if (!a.date) return false;
+      const d = new Date(a.date);
+      return d.getFullYear()===y && d.getMonth()===m;
+    });
+    periodText = `${y}년 ${m+1}월`;
+  } else if (view === 'week') {
+    const days = getWeekDays(cursor);
+    const start = days[0], end = days[6];
+    end.setHours(23,59,59);
+    filtered = appointments.filter(a => {
+      if (!a.date) return false;
+      const d = new Date(a.date);
+      return d >= start && d <= end;
+    });
+    periodText = `${days[0].getMonth()+1}/${days[0].getDate()} ~ ${days[6].getMonth()+1}/${days[6].getDate()}`;
+  } else {
+    const ds = dateStr(cursor);
+    filtered = appointments.filter(a => a.date === ds);
+    periodText = `${cursor.getMonth()+1}월 ${cursor.getDate()}일`;
+  }
+
+  const total = filtered.reduce((s,a)=>s+(Number(a.amount)||0), 0);
+  const card  = filtered.filter(a=>getPayment(a)==='카드').reduce((s,a)=>s+(Number(a.amount)||0),0);
+  const trans = filtered.filter(a=>getPayment(a)==='이체').reduce((s,a)=>s+(Number(a.amount)||0),0);
+  const cash  = filtered.filter(a=>getPayment(a)==='현금').reduce((s,a)=>s+(Number(a.amount)||0),0);
+
+  document.getElementById('revPeriodLabel').textContent = periodText + ' 매출';
+  document.getElementById('revTotal').innerHTML = `₩${fmt(total)} <span>(${filtered.length}건)</span>`;
+  document.getElementById('revCard').textContent = '₩'+fmt(card);
+  document.getElementById('revTransfer').textContent = '₩'+fmt(trans);
+  document.getElementById('revCash').textContent = '₩'+fmt(cash);
+
+  const nowY=new Date().getFullYear(), nowM=new Date().getMonth();
+  const thisMonth = appointments.filter(a=>{
+    if(!a.date) return false;
+    const d=new Date(a.date); return d.getFullYear()===nowY && d.getMonth()===nowM;
+  });
+  document.getElementById('monthCount').innerHTML = `${thisMonth.length} <span>건</span>`;
+}
+
+// ── DATE HELPERS ─────────────────────────────────────────────
+function dateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function getWeekDays(ref) {
+  const d = new Date(ref);
+  d.setDate(d.getDate()-d.getDay());
+  d.setHours(0,0,0,0);
+  return Array.from({length:7},(_,i)=>{ const x=new Date(d); x.setDate(x.getDate()+i); return x; });
+}
+const KO_DAYS = ['일','월','화','수','목','금','토'];
+
+// ── RENDER ───────────────────────────────────────────────────
+function render() {
+  updateRevenue();
+  if (view==='month') renderMonth();
+  else if (view==='week') renderWeek();
+  else renderDay();
+}
+
+// ── MONTH ────────────────────────────────────────────────────
+function renderMonth() {
+  const y=cursor.getFullYear(), m=cursor.getMonth();
+  document.getElementById('periodLabel').textContent = `${y}년 ${m+1}월`;
+  const first=new Date(y,m,1), last=new Date(y,m+1,0);
+  const todayStr=dateStr(new Date());
+  let html='<div class="month-grid">';
+  ['일','월','화','수','목','금','토'].forEach((d,i)=>{
+    html+=`<div class="month-head ${i===0?'sun':i===6?'sat':''}">${d}</div>`;
+  });
+  let cells=[];
+  for(let i=0;i<first.getDay();i++) cells.push({date:new Date(y,m,1-first.getDay()+i),cur:false});
+  for(let d=1;d<=last.getDate();d++) cells.push({date:new Date(y,m,d),cur:true});
+  const rem=7-(cells.length%7); if(rem<7) for(let i=1;i<=rem;i++) cells.push({date:new Date(y,m+1,i),cur:false});
+
+  cells.forEach(({date,cur})=>{
+    const ds=dateStr(date), isToday=ds===todayStr, dow=date.getDay();
+    const appts=appointments.filter(a=>a.date===ds);
+    html+=`<div class="month-day ${!cur?'other-month':''} ${isToday?'today':''}"
+      onclick="openNewModal('${ds}')"
+      ondragover="event.preventDefault();this.classList.add('drag-over')"
+      ondragleave="this.classList.remove('drag-over')"
+      ondrop="dropTo(event,'${ds}')">
+      <div class="day-num ${dow===0?'sun':dow===6?'sat':''}">
+        <div class="day-num-inner">${date.getDate()}</div>
+      </div>
+      <button class="day-plus" onclick="event.stopPropagation();openNewModal('${ds}')">+</button>`;
+    appts.forEach(a=>{
+      const name=getName(a)||'(이름없음)';
+      const time=getTime(a);
+      html+=`<div class="appt-chip" draggable="true"
+        ondragstart="startDrag(event,'${a.id}')"
+        ondragend="endDrag(event)"
+        onclick="event.stopPropagation();openEdit('${a.id}')"
+        title="${name} | ${getWork(a)} | ₩${fmt(a.amount)}">
+        ${time?time+' ':''}${name}
+      </div>`;
+    });
+    html+='</div>';
+  });
+  html+='</div>';
+  document.getElementById('calWrap').innerHTML=html;
+}
+
+// ── WEEK ─────────────────────────────────────────────────────
+function renderWeek() {
+  const days=getWeekDays(cursor);
+  const s=days[0],e=days[6];
+  document.getElementById('periodLabel').textContent=`${s.getMonth()+1}/${s.getDate()} ~ ${e.getMonth()+1}/${e.getDate()}`;
+  const todayStr=dateStr(new Date());
+  const hours=Array.from({length:13},(_,i)=>i+8);
+  let html='<div class="week-grid">';
+  html+='<div class="week-time-head"></div>';
+  days.forEach((d,i)=>{
+    const ds=dateStr(d), isT=ds===todayStr, dow=d.getDay();
+    html+=`<div class="week-day-head ${isT?'today-col':''} ${dow===0?'sun-col':dow===6?'sat-col':''}">
+      <div class="wdh-name">${KO_DAYS[dow]}</div>
+      <div class="wdh-num">${d.getDate()}</div>
+    </div>`;
+  });
+  hours.forEach(h=>{
+    html+=`<div class="week-time-cell">${h}:00</div>`;
+    days.forEach(d=>{
+      const ds=dateStr(d);
+      const appts=appointments.filter(a=>a.date===ds && getTime(a) && parseInt(getTime(a))===h);
+      html+=`<div class="week-slot" onclick="openNewModalTime('${ds}','${String(h).padStart(2,'0')}:00')"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="dropTo(event,'${ds}')">`;
+      appts.forEach(a=>{
+        html+=`<div class="week-appt" draggable="true"
+          ondragstart="startDrag(event,'${a.id}')"
+          ondragend="endDrag(event)"
+          onclick="event.stopPropagation();openEdit('${a.id}')">${getName(a)}</div>`;
+      });
+      html+='</div>';
+    });
+  });
+  html+='</div>';
+  document.getElementById('calWrap').innerHTML=html;
+}
+
+// ── DAY ──────────────────────────────────────────────────────
+function renderDay() {
+  const ds=dateStr(cursor), dow=cursor.getDay();
+  document.getElementById('periodLabel').textContent=`${cursor.getMonth()+1}월 ${cursor.getDate()}일 (${KO_DAYS[dow]})`;
+  const hours=Array.from({length:13},(_,i)=>i+8);
+  let html='<div class="day-view"><div class="day-slots">';
+  hours.forEach(h=>{
+    const appts=appointments.filter(a=>a.date===ds && getTime(a) && parseInt(getTime(a))===h);
+    html+=`<div class="day-slot" onclick="openNewModalTime('${ds}','${String(h).padStart(2,'0')}:00')">
+      <div class="day-slot-time">${h}:00</div>
+      <div class="day-slot-content">`;
+    appts.forEach(a=>{
+      html+=`<div class="day-appt" onclick="event.stopPropagation();openEdit('${a.id}')">
+        ${getTime(a)} ${getName(a)} | ${getCar(a)} | ₩${fmt(a.amount)} | ${getPayment(a)}
+      </div>`;
+    });
+    html+='</div></div>';
+  });
+  html+='</div></div>';
+  document.getElementById('calWrap').innerHTML=html;
+}
+
+// ── DRAG & DROP ──────────────────────────────────────────────
+function startDrag(e,id) { dragId=id; e.target.classList.add('dragging'); }
+function endDrag(e) { e.target.classList.remove('dragging'); document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over')); }
+async function dropTo(e,targetDate) {
+  e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+  if (!dragId) return;
+  await col.doc(dragId).update({date:targetDate});
+  dragId=null;
+}
+
+// ── MODAL ────────────────────────────────────────────────────
+function openNewModal(ds) {
+  editingId=null;
+  document.getElementById('modalTitle').textContent='예약 등록';
+  document.getElementById('btnDelete').style.display='none';
+  document.getElementById('fDate').value=ds;
+  document.getElementById('fTime').value='09:00';
+  ['fName','fPhone','fCar','fPlate','fWork','fAddr','fAmount','fMemo'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('fPay').value='';
+  document.getElementById('modal').classList.add('open');
+}
+function openNewModalTime(ds,time) { openNewModal(ds); document.getElementById('fTime').value=time; }
+function openEdit(id) {
+  const a=appointments.find(x=>x.id===id); if(!a) return;
+  editingId=id;
+  document.getElementById('modalTitle').textContent='예약 수정';
+  document.getElementById('btnDelete').style.display='';
+  document.getElementById('fName').value=getName(a);
+  document.getElementById('fPhone').value=a.phone||'';
+  document.getElementById('fDate').value=a.date||'';
+  document.getElementById('fTime').value=getTime(a);
+  document.getElementById('fCar').value=getCar(a);
+  document.getElementById('fPlate').value=getPlate(a);
+  document.getElementById('fWork').value=getWork(a);
+  document.getElementById('fAddr').value=getAddr(a);
+  document.getElementById('fAmount').value=a.amount||'';
+  document.getElementById('fPay').value=getPayment(a);
+  document.getElementById('fMemo').value=getMemo(a);
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+async function saveAppt() {
+  const data = {
+    customerName: document.getElementById('fName').value.trim(),
+    phone: document.getElementById('fPhone').value.trim(),
+    date: document.getElementById('fDate').value,
+    reservationTime: document.getElementById('fTime').value,
+    carType: document.getElementById('fCar').value.trim(),
+    licencePlate: document.getElementById('fPlate').value.trim(),
+    workDetails: document.getElementById('fWork').value.trim(),
+    address: document.getElementById('fAddr').value.trim(),
+    amount: Number(document.getElementById('fAmount').value)||0,
+    paymentMethod: document.getElementById('fPay').value,
+    memo: document.getElementById('fMemo').value.trim(),
+    updatedAt: new Date().toISOString()
+  };
+  if (!data.customerName) { alert('고객명을 입력해주세요.'); return; }
+  if (!data.date) { alert('날짜를 선택해주세요.'); return; }
+  if (editingId) await col.doc(editingId).update(data);
+  else await col.add({...data, createdAt: new Date().toISOString()});
+  closeModal();
+}
+
+async function deleteAppt() {
+  if (!editingId||!confirm('이 예약을 삭제할까요?')) return;
+  await col.doc(editingId).delete();
+  closeModal();
+}
+
+render();
+</script>
+</body>
+</html>
