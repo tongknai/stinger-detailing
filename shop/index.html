@@ -79,14 +79,19 @@ button{font-family:inherit;cursor:pointer;}
 
 /* 타임라인 뷰 (주간/일간) */
 #tl-view{flex:1;overflow:auto;position:relative;}
-.tl-wrap{display:flex;min-height:100%;}
+/* 전체 타임라인 래퍼: sticky 헤더 행 + 스크롤 바디 행 */
+.tl-wrap{display:flex;flex-direction:column;min-width:100%;}
+/* sticky 헤더 행: 시간 빈칸 + 요일 헤더들 */
+.tl-hdr-row{display:flex;position:sticky;top:0;z-index:5;background:var(--bg2);border-bottom:1px solid var(--border);min-width:100%;}
+.tl-hdr-time{width:52px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);}
+.tl-day-hdr{flex:1;min-width:80px;height:46px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;}
+/* 바디 행: 시간축 + 날짜 컬럼들 */
+.tl-body-row{display:flex;flex:1;min-width:100%;}
 .tl-time-col{width:52px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);position:sticky;left:0;z-index:3;}
 .tl-time-slot{height:60px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;padding:3px 4px 0;font-size:10px;color:var(--text3);}
-.tl-time-slot.half{height:60px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0;}
+.tl-time-slot.half{height:30px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0;}
 .tl-days{display:flex;flex:1;}
 .tl-day-col{flex:1;min-width:80px;border-right:1px solid var(--border);position:relative;}
-.tl-day-hdr{height:46px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;position:sticky;top:0;z-index:2;}
-.tl-day-body{position:relative;}
 .tl-slot{height:30px;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;transition:background .1s;}
 .tl-slot:hover{background:rgba(255,255,255,0.03);}
 .tl-slot-hl{background:rgba(229,62,62,0.2)!important;outline:1px dashed var(--accent);}
@@ -94,7 +99,6 @@ button{font-family:inherit;cursor:pointer;}
 .tl-apt{position:absolute;left:3px;right:3px;border-radius:5px;padding:4px 6px;cursor:pointer;overflow:hidden;z-index:1;transition:opacity .1s;}
 .tl-apt:hover{opacity:.8;}
 .tl-apt.dragging{opacity:.4;}
-.tl-hdr-wrap{position:sticky;top:0;z-index:4;display:flex;background:var(--bg2);}
 
 /* 모달 */
 #modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;}
@@ -308,10 +312,11 @@ function setCalView(v,btn){calView=v;document.querySelectorAll('#header .view-ta
 function setRevPeriod(v,btn){revPeriod=v;document.querySelectorAll('#sidebar .view-tab').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');renderSidebar();}
 
 function calcRev(){
-  const today=new Date();let list=apts;
-  if(revPeriod==='일별')list=apts.filter(a=>a.date===ds(today));
-  else if(revPeriod==='주간'){const wd=weekDays(today),s=ds(wd[0]),e=ds(wd[6]);list=apts.filter(a=>a.date>=s&&a.date<=e);}
-  else{const pfx=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0');list=apts.filter(a=>a.date.startsWith(pfx));}
+  // curDate 기준으로 매출 집계 (현재 보고 있는 날짜/주/월 반영)
+  const ref=new Date(curDate);let list=apts;
+  if(revPeriod==='일별')list=apts.filter(a=>a.date===ds(ref));
+  else if(revPeriod==='주간'){const wd=weekDays(ref),s=ds(wd[0]),e=ds(wd[6]);list=apts.filter(a=>a.date>=s&&a.date<=e);}
+  else{const pfx=ref.getFullYear()+'-'+String(ref.getMonth()+1).padStart(2,'0');list=apts.filter(a=>a.date.startsWith(pfx));}
   const total=list.reduce((s,a)=>s+Number(a.amount||0),0);
   const byM={카드:0,이체:0,현금:0};
   list.forEach(a=>{if(byM[a.paymentMethod]!==undefined)byM[a.paymentMethod]+=Number(a.amount||0);});
@@ -320,7 +325,17 @@ function calcRev(){
 
 function renderSidebar(){
   const{total,byM,count}=calcRev();
-  const labels={'월간':`${new Date().getMonth()+1}월 매출`,'주간':'이번 주 매출','일별':`오늘 매출`};
+  const ref=new Date(curDate);
+  const today=new Date();
+  const isCurMonth=ref.getFullYear()===today.getFullYear()&&ref.getMonth()===today.getMonth();
+  const refWd=weekDays(ref),todWd=weekDays(today);
+  const isCurWeek=ds(refWd[0])===ds(todWd[0]);
+  const isToday=ds(ref)===ds(today);
+  const labels={
+    '월간':isCurMonth?`${ref.getMonth()+1}월 매출`:`${ref.getFullYear()}년 ${ref.getMonth()+1}월 매출`,
+    '주간':isCurWeek?'이번 주 매출':`${ref.getMonth()+1}월 ${refWd[0].getDate()}~${refWd[6].getDate()}일 매출`,
+    '일별':isToday?'오늘 매출':`${ref.getMonth()+1}월 ${ref.getDate()}일 매출`
+  };
   document.getElementById('rev-label').textContent=labels[revPeriod]||'매출';
   document.getElementById('rev-total').textContent='₩'+fmt(total);
   document.getElementById('rev-count').textContent=count+'건 예약';
@@ -358,30 +373,35 @@ function renderMonth(){
 
 // ── 타임라인 공통 렌더 ────────────────────────────────────────
 function renderTimeline(days){
-  // 시간 컬럼 HTML
-  let timeCol='<div class="tl-time-col" style="padding-top:46px;">';
+  // ① sticky 헤더 행: 빈 시간셀 + 요일/날짜 헤더
+  let hdrCols='<div class="tl-hdr-time"></div>';
+  days.forEach((d,i)=>{
+    const dStr=ds(d),isT=dStr===todayStr(),dow=d.getDay();
+    const hdrColor=isT?'var(--accent)':'transparent';
+    const txtColor=isT?'#fff':dow===0?'#f87171':dow===6?'#60a5fa':'var(--text)';
+    const dayLabelColor=dow===0?'#f87171':dow===6?'#60a5fa':'var(--text3)';
+    hdrCols+=`<div class="tl-day-hdr" style="border-right:${i<days.length-1?'1px solid var(--border)':'none'};">
+      <div style="font-size:10px;color:${dayLabelColor};">${WEEK_SUN[dow]}</div>
+      <div style="width:26px;height:26px;border-radius:50%;background:${hdrColor};color:${txtColor};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:${isT?700:500};margin-top:2px;">${d.getDate()}</div>
+    </div>`;
+  });
+
+  // ② 시간 컬럼 (정시는 60px, 30분은 30px)
+  let timeCol='<div class="tl-time-col">';
   for(let s=0;s<TL_TOTAL_SLOTS;s++){
-    const totalMin=s*30+TL_START*60, h=Math.floor(totalMin/60), m=totalMin%60;
+    const totalMin=s*30+TL_START*60,h=Math.floor(totalMin/60),m=totalMin%60;
     if(m===0) timeCol+=`<div class="tl-time-slot">${String(h).padStart(2,'0')}:00</div>`;
     else timeCol+=`<div class="tl-time-slot half"></div>`;
   }
   timeCol+='</div>';
 
-  // 각 날짜 컬럼
+  // ③ 각 날짜 컬럼 (헤더 없이 바디만)
   let dayCols='';
   days.forEach((d,i)=>{
-    const dStr=ds(d), isT=dStr===todayStr();
+    const dStr=ds(d),isT=dStr===todayStr();
     const da=apts.filter(a=>a.date===dStr).sort((a,b)=>a.reservationTime.localeCompare(b.reservationTime));
-    const dow=d.getDay();
-    // 헤더
-    const hdrColor=isT?'var(--accent)':'transparent';
-    const txtColor=isT?'#fff':dow===0?'#f87171':dow===6?'#60a5fa':'var(--text)';
     dayCols+=`<div class="tl-day-col" style="border-right:${i<days.length-1?'1px solid var(--border)':'none'};">
-      <div class="tl-day-hdr">
-        <div style="font-size:10px;color:${dow===0?'#f87171':dow===6?'#60a5fa':'var(--text3)'};">${WEEK_SUN[dow]}</div>
-        <div style="width:26px;height:26px;border-radius:50%;background:${hdrColor};color:${txtColor};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:${isT?700:500};margin-top:2px;">${d.getDate()}</div>
-      </div>
-      <div class="tl-day-body" style="height:${TL_BODY_H}px;position:relative;background:${isT?'rgba(229,62,62,0.02)':'var(--bg)'};">`;
+      <div style="height:${TL_BODY_H}px;position:relative;background:${isT?'rgba(229,62,62,0.02)':'var(--bg)'};">`;
 
     // 슬롯 클릭 영역
     for(let s=0;s<TL_TOTAL_SLOTS;s++){
@@ -396,7 +416,7 @@ function renderTimeline(days){
     // 예약 블록
     da.forEach(a=>{
       const y=timeToY(a.reservationTime);
-      const h=APT_DURATION*2*SLOT_H; // 2시간 = 4슬롯 = 120px
+      const h=APT_DURATION*2*SLOT_H;
       const name=(a.customerName||'').length>6?(a.customerName||'').slice(0,6)+'…':(a.customerName||'');
       dayCols+=`<div class="tl-apt" draggable="true"
         style="top:${y}px;height:${h}px;background:${PAY_DIM[a.paymentMethod]};border-left:3px solid ${PAY_COLOR[a.paymentMethod]};"
@@ -415,19 +435,14 @@ function renderTimeline(days){
     dayCols+=`</div></div>`;
   });
 
-  const wrap=`<div id="tl-view"><div class="tl-wrap" style="min-width:${52+days.length*80}px;">${timeCol}<div class="tl-days">${dayCols}</div></div></div>`;
+  // ④ 조립: sticky 헤더 행 + 바디 행(시간축 + 날짜 컬럼들)
+  const wrap=`<div id="tl-view">
+    <div class="tl-wrap" style="min-width:${52+days.length*80}px;">
+      <div class="tl-hdr-row">${hdrCols}</div>
+      <div class="tl-body-row">${timeCol}<div class="tl-days">${dayCols}</div></div>
+    </div>
+  </div>`;
   document.getElementById('cal-wrap').innerHTML=wrap;
-
-  // 드래그 드롭 타임라인용
-  document.querySelectorAll('.tl-day-col').forEach(col=>{
-    col.addEventListener('dragover',e=>{e.preventDefault();col.classList.add('drag-over');});
-    col.addEventListener('dragleave',()=>col.classList.remove('drag-over'));
-    col.addEventListener('drop',e=>{
-      e.preventDefault();col.classList.remove('drag-over');
-      if(!dragId)return;
-      const dStr=col.querySelector('.tl-day-hdr').dataset.date;
-    });
-  });
 }
 
 function renderWeek(){renderTimeline(weekDays(curDate));}
