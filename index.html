@@ -389,15 +389,23 @@ function renderTimeline(days){
     </div>`;
   });
 
-  // ② 시간 컬럼: position:relative 컨테이너 안에 각 레이블을 absolute로 정확히 배치
-  // → 슬롯 s의 top = s*SLOT_H, 정시 레이블도 동일한 top값에 배치되어 완벽 정렬
+  // ② 시간 컬럼: 정시 라벨을 해당 경계선(border)에 걸쳐서 표시
+  // 슬롯 s=0 → 08:00 경계는 top:0px
+  // 슬롯 s=2 → 09:00 경계는 top:60px  (예약블록 09:00의 top:60px 과 일치)
+  // 라벨을 경계선 바로 위에 음수 마진으로 올려서 구글캘린더처럼 표시
   let timeCol=`<div class="tl-time-col" style="height:${TL_BODY_H}px;position:relative;">`;
   for(let s=0;s<TL_TOTAL_SLOTS;s++){
     const totalMin=s*30+TL_START*60,h=Math.floor(totalMin/60),m=totalMin%60;
+    const topPx=s*SLOT_H;
     if(m===0){
-      timeCol+=`<div style="position:absolute;top:${s*SLOT_H}px;left:0;right:0;height:30px;display:flex;align-items:flex-start;padding:2px 4px 0;font-size:10px;color:var(--text3);border-bottom:1px solid var(--border);box-sizing:border-box;">${String(h).padStart(2,'0')}:00</div>`;
+      // 라벨을 경계선 위에 올려서 표시 (첫번째 08:00은 top:2px로 약간 내려서 잘림 방지)
+      const labelTop = s===0 ? 2 : topPx - 8;
+      timeCol+=`<div style="position:absolute;top:${labelTop}px;left:0;right:0;height:16px;display:flex;align-items:center;justify-content:flex-end;padding-right:5px;font-size:10px;color:var(--text3);box-sizing:border-box;z-index:1;">${String(h).padStart(2,'0')}:00</div>`;
+      // 경계선
+      if(s>0) timeCol+=`<div style="position:absolute;top:${topPx}px;left:0;right:0;height:1px;background:var(--border);"></div>`;
     } else {
-      timeCol+=`<div style="position:absolute;top:${s*SLOT_H}px;left:0;right:0;height:30px;border-bottom:1px solid rgba(255,255,255,0.04);box-sizing:border-box;"></div>`;
+      // 30분 경계선 (연하게)
+      timeCol+=`<div style="position:absolute;top:${topPx}px;left:0;right:0;height:1px;background:rgba(255,255,255,0.04);"></div>`;
     }
   }
   timeCol+='</div>';
@@ -410,11 +418,13 @@ function renderTimeline(days){
     dayCols+=`<div class="tl-day-col" style="border-right:${i<days.length-1?'1px solid var(--border)':'none'};">
       <div style="height:${TL_BODY_H}px;position:relative;background:${isT?'rgba(229,62,62,0.02)':'var(--bg)'};">`;
 
-    // 슬롯 클릭 영역 (정시 경계선은 hour-border 클래스로 강조)
+    // 날짜 컬럼 배경 + 경계선들 (시간축과 동일한 top 위치)
     for(let s=0;s<TL_TOTAL_SLOTS;s++){
       const t=timeToSlotClick(s);
-      const isHour=(s%2===1); // 홀수 슬롯 = 정시 하단 경계
-      dayCols+=`<div class="tl-slot${isHour?' hour-border':''}" style="top:${s*SLOT_H}px;position:absolute;left:0;right:0;" onclick="openAdd('${dStr}','${t}')"
+      const topPx=s*SLOT_H;
+      const isHour=(s%2===0); // 짝수 슬롯 = 정시 시작
+      // 클릭 영역: 30px 높이
+      dayCols+=`<div class="tl-slot${isHour?' hour-border':''}" style="top:${topPx}px;position:absolute;left:0;right:0;" onclick="openAdd('${dStr}','${t}')"
         ondragover="event.preventDefault();event.stopPropagation();document.querySelectorAll('.tl-slot-hl').forEach(x=>x.classList.remove('tl-slot-hl'));this.classList.add('tl-slot-hl')"
         ondragleave="this.classList.remove('tl-slot-hl')"
         ondrop="this.classList.remove('tl-slot-hl');handleDropTl(event,'${dStr}','${t}')"></div>`;
