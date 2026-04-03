@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0d1117"/>
+  <polygon points="256,46 419,138 419,334 256,426 93,334 93,138" fill="#e53e3e" opacity="0.12"/>
+  <polygon points="256,66 403,154 403,318 256,406 109,318 109,154" fill="none" stroke="#e53e3e" stroke-width="7" opacity="0.7"/>
+  <text x="256" y="316" font-family="Arial Black,Arial" font-weight="900" font-size="256" fill="#e53e3e" text-anchor="middle">S</text>
+  <text x="256" y="446" font-family="Arial,sans-serif" font-weight="700" font-size="40" fill="#e53e3e" text-anchor="middle" letter-spacing="14">STINGER</text>
+</svg>
