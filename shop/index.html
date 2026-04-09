@@ -60,7 +60,7 @@ button{font-family:inherit;cursor:pointer;}
 
 /* 캘린더 공통 */
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);}
-.cal-header-row{background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:2;}
+.cal-header-row{background:var(--bg2);border-bottom:1px solid var(--border);}
 .cal-cell{background:var(--bg);padding:5px 6px;min-height:85px;}
 .cal-cell.other-month{background:var(--bg2);opacity:.38;}
 .cal-cell.drag-over,.week-col.drag-over,.tl-slot.drag-over{background:rgba(229,62,62,0.12)!important;outline:2px dashed #e53e3e;}
@@ -322,9 +322,9 @@ function renderMonth(){
   for(let i=1;i<=dim;i++) cells.push({day:i,cur:true,date:new Date(y,m,i)});
   while(cells.length%7!==0) cells.push({day:cells.length-dim-fd+1,cur:false,date:new Date(y,m+1,cells.length-dim-fd+1)});
   const rows=cells.length/7;
-  let html=`<div class="cal-grid cal-header-row">`;
-  WEEK_SUN.forEach((d,i)=>{html+=`<div style="text-align:center;padding:7px 0;font-size:12px;font-weight:600;color:${i===0?'#f87171':i===6?'#60a5fa':'var(--text3)'};">${d}</div>`;});
-  html+=`</div><div class="cal-grid" style="display:grid;grid-template-rows:repeat(${rows},1fr);flex:1;gap:1px;background:var(--border);">`;
+  // 요일헤더+날짜셀을 단일 grid로 통합 → 폭이 항상 일치
+  let html=`<div class="cal-grid" style="display:grid;grid-template-rows:auto repeat(${rows},1fr);flex:1;background:var(--border);gap:1px;">`;
+  WEEK_SUN.forEach((d,i)=>{html+=`<div style="text-align:center;padding:7px 0;font-size:12px;font-weight:600;color:${i===0?'#f87171':i===6?'#60a5fa':'var(--text3)'};background:var(--bg2);position:sticky;top:0;z-index:2;">${d}</div>`;});;
   cells.forEach((cell,idx)=>{
     const dow=idx%7,isT=ds(cell.date)===todayStr(),dStr=ds(cell.date);
     const da=apts.filter(a=>a.date===dStr).sort((a,b)=>a.reservationTime.localeCompare(b.reservationTime));
