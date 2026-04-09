@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">
-  <rect width="180" height="180" rx="40" fill="#0d1117"/>
-  <polygon points="90,16 148,50 148,118 90,152 32,118 32,50" fill="#e53e3e" opacity="0.12"/>
-  <polygon points="90,24 142,56 142,114 90,146 38,114 38,56" fill="none" stroke="#e53e3e" stroke-width="2.5" opacity="0.7"/>
-  <text x="90" y="112" font-family="Arial Black,Arial" font-weight="900" font-size="96" fill="#e53e3e" text-anchor="middle">S</text>
-  <text x="90" y="158" font-family="Arial,sans-serif" font-weight="700" font-size="15" fill="#e53e3e" text-anchor="middle" letter-spacing="5">STINGER</text>
-</svg>
